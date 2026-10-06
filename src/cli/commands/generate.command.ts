@@ -1,5 +1,4 @@
 import chalk from 'chalk';
-import got from 'got';
 import { Command } from './command.interface.js';
 import { MockServerData } from '../../shared/types/index.js';
 import { TSVOfferGenerator } from '../../shared/libs/offer-generator/index.js';
@@ -12,11 +11,18 @@ export class GenerateCommand implements Command {
   }
 
   private async load(url: string): Promise<MockServerData> {
+    let response: Response;
     try {
-      return await got.get(url).json<MockServerData>();
+      response = await fetch(url);
     } catch {
       throw new Error(`Can't load data from ${url}`);
     }
+
+    if (!response.ok) {
+      throw new Error(`Can't load data from ${url}: HTTP ${response.status}`);
+    }
+
+    return await response.json() as MockServerData;
   }
 
   private async write(filepath: string, offerCount: number, mockData: MockServerData): Promise<void> {
