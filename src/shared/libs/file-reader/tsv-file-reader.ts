@@ -1,97 +1,50 @@
-import { readFileSync } from 'node:fs';
+import EventEmitter from 'node:events';
+import { createReadStream } from 'node:fs';
 import { FileReader } from './file-reader.interface.js';
-import { City, Good, Offer, OfferType, UserType, isCity, isGood, isOfferType, isUserType } from '../../types/index.js';
 
-const COLUMNS_COUNT = 19;
-const LIST_SEPARATOR = ';';
+const CHUNK_SIZE = 16384; // 16KB
 
-export class TSVFileReader implements FileReader {
-  private rawData = '';
+type TSVFileReaderEvents = {
+  line: [line: string, lineNumber: number];
+  end: [importedRowCount: number];
+};
 
+export class TSVFileReader extends EventEmitter<TSVFileReaderEvents> implements FileReader {
   constructor(
     private readonly filename: string
-  ) {}
-
-  public read(): void {
-    this.rawData = readFileSync(this.filename, { encoding: 'utf-8' });
+  ) {
+    super();
   }
 
-  public toArray(): Offer[] {
-    if (!this.rawData) {
-      throw new Error('File was not read');
-    }
+  public async read(): Promise<void> {
+    const readStream = createReadStream(this.filename, {
+      highWaterMark: CHUNK_SIZE,
+      encoding: 'utf-8',
+    });
 
-    return this.rawData
-      .split('\n')
-      .filter((row) => row.trim().length > 0)
-      .map((row, index) => this.parseRow(row, index + 1));
-  }
+    let remainingData = '';
+    let lineNumber = 0;
+    let importedRowCount = 0;
 
-  private parseRow(row: string, rowNumber: number): Offer {
-    const columns = row.split('\t');
-
-    if (columns.length !== COLUMNS_COUNT) {
-      throw new Error(`Row ${rowNumber}: expected ${COLUMNS_COUNT} columns, got ${columns.length}`);
-    }
-
-    const [
-      title, description, postDate, city, previewImage, images, isPremium, isFavorite, rating,
-      type, bedrooms, maxAdults, price, goods, name, email, avatarPath, userType, coordinates,
-    ] = columns;
-    const [latitude, longitude] = coordinates.split(LIST_SEPARATOR);
-
-    return {
-      title,
-      description,
-      postDate: new Date(postDate),
-      city: this.parseCity(city, rowNumber),
-      previewImage,
-      images: images.split(LIST_SEPARATOR),
-      isPremium: isPremium === 'true',
-      isFavorite: isFavorite === 'true',
-      rating: Number.parseFloat(rating),
-      type: this.parseOfferType(type, rowNumber),
-      bedrooms: Number.parseInt(bedrooms, 10),
-      maxAdults: Number.parseInt(maxAdults, 10),
-      price: Number.parseInt(price, 10),
-      goods: goods.split(LIST_SEPARATOR).map((good) => this.parseGood(good, rowNumber)),
-      author: { name, email, avatarPath, type: this.parseUserType(userType, rowNumber) },
-      location: {
-        latitude: Number.parseFloat(latitude),
-        longitude: Number.parseFloat(longitude),
-      },
+    const handleLine = (line: string) => {
+      lineNumber++;
+      if (line.trim().length > 0) {
+        importedRowCount++;
+        this.emit('line', line.replace(/\r$/, ''), lineNumber);
+      }
     };
-  }
 
-  private parseCity(value: string, rowNumber: number): City {
-    const city = isCity(value);
-    if (!city) {
-      throw new Error(`Row ${rowNumber}: unknown city "${value}"`);
-    }
-    return city;
-  }
+    for await (const chunk of readStream) {
+      remainingData += chunk;
 
-  private parseOfferType(value: string, rowNumber: number): OfferType {
-    const offerType = isOfferType(value);
-    if (!offerType) {
-      throw new Error(`Row ${rowNumber}: unknown offer type "${value}"`);
+      let nextLinePosition: number;
+      while ((nextLinePosition = remainingData.indexOf('\n')) >= 0) {
+        handleLine(remainingData.slice(0, nextLinePosition));
+        remainingData = remainingData.slice(nextLinePosition + 1);
+      }
     }
-    return offerType;
-  }
 
-  private parseGood(value: string, rowNumber: number): Good {
-    const good = isGood(value);
-    if (!good) {
-      throw new Error(`Row ${rowNumber}: unknown good "${value}"`);
-    }
-    return good;
-  }
-
-  private parseUserType(value: string, rowNumber: number): UserType {
-    const userType = isUserType(value);
-    if (!userType) {
-      throw new Error(`Row ${rowNumber}: unknown user type "${value}"`);
-    }
-    return userType;
+    handleLine(remainingData);
+    this.emit('end', importedRowCount);
   }
 }
