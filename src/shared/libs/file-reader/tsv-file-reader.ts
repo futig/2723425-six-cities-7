@@ -5,7 +5,7 @@ import { FileReader } from './file-reader.interface.js';
 const CHUNK_SIZE = 16384; // 16KB
 
 type TSVFileReaderEvents = {
-  line: [line: string, lineNumber: number];
+  line: [line: string, lineNumber: number, resolve: () => void];
   end: [importedRowCount: number];
 };
 
@@ -26,11 +26,13 @@ export class TSVFileReader extends EventEmitter<TSVFileReaderEvents> implements 
     let lineNumber = 0;
     let importedRowCount = 0;
 
-    const handleLine = (line: string) => {
+    const handleLine = async (line: string) => {
       lineNumber++;
       if (line.trim().length > 0) {
         importedRowCount++;
-        this.emit('line', line.replace(/\r$/, ''), lineNumber);
+        await new Promise<void>((resolve) => {
+          this.emit('line', line.replace(/\r$/, ''), lineNumber, resolve);
+        });
       }
     };
 
@@ -39,12 +41,12 @@ export class TSVFileReader extends EventEmitter<TSVFileReaderEvents> implements 
 
       let nextLinePosition: number;
       while ((nextLinePosition = remainingData.indexOf('\n')) >= 0) {
-        handleLine(remainingData.slice(0, nextLinePosition));
+        await handleLine(remainingData.slice(0, nextLinePosition));
         remainingData = remainingData.slice(nextLinePosition + 1);
       }
     }
 
-    handleLine(remainingData);
+    await handleLine(remainingData);
     this.emit('end', importedRowCount);
   }
 }
