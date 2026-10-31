@@ -8,6 +8,7 @@ import { Config, RestConfig, RestSchema } from '../../shared/libs/config/index.j
 import { DatabaseClient, MongoDatabaseClient } from '../../shared/libs/database-client/index.js';
 import { DefaultUserService, UserModel, UserService } from '../../shared/modules/user/index.js';
 import { DefaultOfferService, OfferModel, OfferService } from '../../shared/modules/offer/index.js';
+import { CommentModel } from '../../shared/modules/comment/index.js';
 import { Offer } from '../../shared/types/index.js';
 
 export class ImportCommand implements Command {
@@ -22,7 +23,7 @@ export class ImportCommand implements Command {
     this.logger = new ConsoleLogger();
     this.databaseClient = new MongoDatabaseClient(this.logger);
     this.userService = new DefaultUserService(this.logger, UserModel);
-    this.offerService = new DefaultOfferService(this.logger, OfferModel);
+    this.offerService = new DefaultOfferService(this.logger, OfferModel, UserModel, CommentModel);
   }
 
   public getName(): string {
@@ -48,7 +49,8 @@ export class ImportCommand implements Command {
     }
   };
 
-  private async saveOffer({ author, ...offerData }: Offer): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private async saveOffer({ author, isFavorite, rating, ...offerData }: Offer): Promise<void> {
     const user = await this.userService.findOrCreate({
       ...author,
       password: DEFAULT_USER_PASSWORD,
