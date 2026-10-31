@@ -4,6 +4,7 @@ import { createRestApplicationContainer, RestApplication } from './rest/index.js
 import { createUserContainer } from './shared/modules/user/index.js';
 import { createOfferContainer } from './shared/modules/offer/index.js';
 import { createCommentContainer } from './shared/modules/comment/index.js';
+import { createFavoriteContainer } from './shared/modules/favorite/index.js';
 import { Component } from './shared/types/index.js';
 
 async function main() {
@@ -13,6 +14,7 @@ async function main() {
     createUserContainer(),
     createOfferContainer(),
     createCommentContainer(),
+    createFavoriteContainer(),
   );
 
   const application = container.get<RestApplication>(Component.RestApplication);
