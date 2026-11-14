@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { BaseController, HttpError, HttpMethod } from '../../libs/rest/index.js';
+import { BaseController, HttpError, HttpMethod, ValidateDtoMiddleware } from '../../libs/rest/index.js';
 import { Logger } from '../../libs/logger/index.js';
 import { Config, RestSchema } from '../../libs/config/index.js';
 import { Component } from '../../types/index.js';
@@ -10,6 +10,8 @@ import { UserService } from './user-service.interface.js';
 import { CreateUserRequest } from './create-user-request.type.js';
 import { LoginUserRequest } from './login-user-request.type.js';
 import { UserRdo } from './rdo/user.rdo.js';
+import { CreateUserDto } from './dto/create-user.dto.js';
+import { LoginUserDto } from './dto/login-user.dto.js';
 
 @injectable()
 export class UserController extends BaseController {
@@ -21,8 +23,18 @@ export class UserController extends BaseController {
     super(logger);
     this.logger.info('Register routes for UserController…');
 
-    this.addRoute({ path: '/register', method: HttpMethod.Post, handler: this.create });
-    this.addRoute({ path: '/login', method: HttpMethod.Post, handler: this.login });
+    this.addRoute({
+      path: '/register',
+      method: HttpMethod.Post,
+      handler: this.create,
+      middlewares: [new ValidateDtoMiddleware(CreateUserDto)],
+    });
+    this.addRoute({
+      path: '/login',
+      method: HttpMethod.Post,
+      handler: this.login,
+      middlewares: [new ValidateDtoMiddleware(LoginUserDto)],
+    });
     this.addRoute({ path: '/login', method: HttpMethod.Get, handler: this.checkAuthenticate });
   }
 
@@ -32,7 +44,7 @@ export class UserController extends BaseController {
     if (existsUser) {
       throw new HttpError(
         StatusCodes.CONFLICT,
-        `User with email «${body.email}» exists.`,
+        `User with email "${body.email}" exists.`,
         'UserController',
       );
     }
@@ -47,7 +59,7 @@ export class UserController extends BaseController {
     if (!existsUser) {
       throw new HttpError(
         StatusCodes.UNAUTHORIZED,
-        `User with email «${body.email}» not found.`,
+        `User with email "${body.email}" not found.`,
         'UserController',
       );
     }
