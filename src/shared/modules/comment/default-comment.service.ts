@@ -16,10 +16,10 @@ export class DefaultCommentService implements CommentService {
     @inject(Component.OfferService) private readonly offerService: OfferService
   ) {}
 
-  public async create(dto: CreateCommentDto): Promise<DocumentType<CommentEntity>> {
-    const comment = await this.commentModel.create(dto);
-    await this.offerService.incCommentCount(dto.offerId, dto.rating);
-    this.logger.info(`New comment created for offer: ${dto.offerId}`);
+  public async create(offerId: string, dto: CreateCommentDto): Promise<DocumentType<CommentEntity>> {
+    const comment = await this.commentModel.create({ ...dto, offerId });
+    await this.offerService.incCommentCount(offerId, dto.rating);
+    this.logger.info(`New comment created for offer: ${offerId}`);
 
     return comment.populate('authorId');
   }

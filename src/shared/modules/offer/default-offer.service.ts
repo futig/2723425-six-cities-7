@@ -67,7 +67,7 @@ export class DefaultOfferService implements OfferService {
 
   public async updateById(offerId: string, dto: UpdateOfferDto): Promise<DocumentType<OfferEntity> | null> {
     return this.offerModel
-      .findByIdAndUpdate(offerId, dto, { returnDocument: 'after' })
+      .findByIdAndUpdate(offerId, dto, { returnDocument: 'after', runValidators: true })
       .populate('authorId')
       .exec();
   }
@@ -99,9 +99,14 @@ export class DefaultOfferService implements OfferService {
         {
           $set: {
             rating: {
-              $divide: [
-                { $add: [{ $multiply: ['$rating', '$commentCount'] }, commentRating] },
-                { $add: ['$commentCount', 1] },
+              $round: [
+                {
+                  $divide: [
+                    { $add: [{ $multiply: ['$rating', '$commentCount'] }, commentRating] },
+                    { $add: ['$commentCount', 1] },
+                  ],
+                },
+                1,
               ],
             },
             commentCount: { $add: ['$commentCount', 1] },

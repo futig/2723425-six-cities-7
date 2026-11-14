@@ -259,6 +259,8 @@ paths:
       description: Возвращает все предложения, добавленные пользователем в избранное. Доступно только авторизованным клиентам.
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserIdQuery"
       responses:
         "200":
           description: Список избранных предложений
@@ -274,6 +276,7 @@ paths:
   /favorites/{offerId}:
     parameters:
       - $ref: "#/components/parameters/OfferId"
+      - $ref: "#/components/parameters/UserIdQuery"
 
     post:
       tags:
@@ -498,6 +501,13 @@ components:
       name: offerId
       in: path
       description: Идентификатор предложения
+      required: true
+      schema:
+        $ref: "#/components/schemas/Id"
+    UserIdQuery:
+      name: userId
+      in: query
+      description: Идентификатор пользователя (временно, до реализации авторизации)
       required: true
       schema:
         $ref: "#/components/schemas/Id"
@@ -738,8 +748,9 @@ components:
     CreateOffer:
       type: object
       description: |-
-        Данные для создания предложения. Дата публикации, автор (из токена), рейтинг
-        (по комментариям), количество комментариев и флаг "Избранное" вычисляются сервером.
+        Данные для создания предложения. Дата публикации, рейтинг (по комментариям),
+        количество комментариев и флаг "Избранное" вычисляются сервером. До реализации
+        авторизации идентификатор автора передаётся в поле `authorId`.
       required:
         - title
         - description
@@ -752,6 +763,7 @@ components:
         - maxAdults
         - price
         - goods
+        - authorId
         - location
       properties:
         title:
@@ -805,6 +817,8 @@ components:
           uniqueItems: true
           items:
             $ref: "#/components/schemas/Good"
+        authorId:
+          $ref: "#/components/schemas/Id"
         location:
           $ref: "#/components/schemas/Location"
 
@@ -878,10 +892,13 @@ components:
 
     CreateComment:
       type: object
-      description: Данные для создания комментария. Дата публикации и автор (из токена) задаются сервером
+      description: |-
+        Данные для создания комментария. Дата публикации задаётся сервером. До реализации
+        авторизации идентификатор автора передаётся в поле `authorId`.
       required:
         - text
         - rating
+        - authorId
       properties:
         text:
           type: string
@@ -893,6 +910,8 @@ components:
           minimum: 1
           maximum: 5
           example: 4
+        authorId:
+          $ref: "#/components/schemas/Id"
 
     Error:
       type: object
