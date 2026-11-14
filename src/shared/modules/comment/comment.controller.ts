@@ -5,7 +5,7 @@ import { fillDTO } from '../../helpers/index.js';
 import { Logger } from '../../libs/logger/index.js';
 import {
   BaseController,
-  HttpError,
+  DocumentExistsMiddleware,
   HttpMethod,
   ValidateDtoMiddleware,
   ValidateObjectIdMiddleware,
@@ -33,7 +33,10 @@ export class CommentController extends BaseController {
       path: '/:offerId/comments',
       method: HttpMethod.Get,
       handler: this.index,
-      middlewares: [new ValidateObjectIdMiddleware('offerId')],
+      middlewares: [
+        new ValidateObjectIdMiddleware('offerId'),
+        new DocumentExistsMiddleware(this.offerService, 'Offer', 'offerId'),
+      ],
     });
     this.addRoute({
       path: '/:offerId/comments',
@@ -42,40 +45,25 @@ export class CommentController extends BaseController {
       middlewares: [
         new ValidateObjectIdMiddleware('offerId'),
         new ValidateDtoMiddleware(CreateCommentDto),
+        new DocumentExistsMiddleware(this.offerService, 'Offer', 'offerId'),
+        new DocumentExistsMiddleware(
+          this.userService,
+          'Author',
+          'authorId',
+          'body',
+          StatusCodes.BAD_REQUEST,
+        ),
       ],
     });
   }
 
   public async index({ params }: CommentListRequest, res: Response): Promise<void> {
-    await this.ensureOfferExists(params.offerId);
     const comments = await this.commentService.findByOfferId(params.offerId);
     this.ok(res, fillDTO(CommentRdo, comments));
   }
 
   public async create({ params, body }: CreateCommentRequest, res: Response): Promise<void> {
-    await this.ensureOfferExists(params.offerId);
-    await this.ensureAuthorExists(body.authorId);
     const comment = await this.commentService.create(params.offerId, body);
     this.created(res, fillDTO(CommentRdo, comment));
-  }
-
-  private async ensureAuthorExists(authorId: string): Promise<void> {
-    if (!await this.userService.findById(authorId)) {
-      throw new HttpError(
-        StatusCodes.BAD_REQUEST,
-        `Author with id ${authorId} not found.`,
-        'CommentController',
-      );
-    }
-  }
-
-  private async ensureOfferExists(offerId: string): Promise<void> {
-    if (!await this.offerService.exists(offerId)) {
-      throw new HttpError(
-        StatusCodes.NOT_FOUND,
-        `Offer with id ${offerId} not found.`,
-        'CommentController',
-      );
-    }
   }
 }

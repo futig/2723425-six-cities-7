@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import {
   BaseController,
+  DocumentExistsMiddleware,
   HttpError,
   HttpMethod,
   ValidateDtoMiddleware,
@@ -40,14 +41,26 @@ export class OfferController extends BaseController {
       path: '/',
       method: HttpMethod.Post,
       handler: this.create,
-      middlewares: [new ValidateDtoMiddleware(CreateOfferDto)],
+      middlewares: [
+        new ValidateDtoMiddleware(CreateOfferDto),
+        new DocumentExistsMiddleware(
+          this.userService,
+          'Author',
+          'authorId',
+          'body',
+          StatusCodes.BAD_REQUEST,
+        ),
+      ],
     });
     this.addRoute({ path: '/premium', method: HttpMethod.Get, handler: this.getPremium });
     this.addRoute({
       path: '/:offerId',
       method: HttpMethod.Get,
       handler: this.show,
-      middlewares: [new ValidateObjectIdMiddleware('offerId')],
+      middlewares: [
+        new ValidateObjectIdMiddleware('offerId'),
+        new DocumentExistsMiddleware(this.offerService, 'Offer', 'offerId'),
+      ],
     });
     this.addRoute({
       path: '/:offerId',
@@ -56,13 +69,17 @@ export class OfferController extends BaseController {
       middlewares: [
         new ValidateObjectIdMiddleware('offerId'),
         new ValidateDtoMiddleware(UpdateOfferDto),
+        new DocumentExistsMiddleware(this.offerService, 'Offer', 'offerId'),
       ],
     });
     this.addRoute({
       path: '/:offerId',
       method: HttpMethod.Delete,
       handler: this.delete,
-      middlewares: [new ValidateObjectIdMiddleware('offerId')],
+      middlewares: [
+        new ValidateObjectIdMiddleware('offerId'),
+        new DocumentExistsMiddleware(this.offerService, 'Offer', 'offerId'),
+      ],
     });
   }
 
@@ -82,7 +99,6 @@ export class OfferController extends BaseController {
   }
 
   public async create({ body }: CreateOfferRequest, res: Response): Promise<void> {
-    await this.ensureAuthorExists(body.authorId);
     const result = await this.offerService.create({ ...body, postDate: new Date() });
     const offer = await this.offerService.findById(result.id);
     this.created(res, fillDTO(OfferRdo, offer));
@@ -105,49 +121,16 @@ export class OfferController extends BaseController {
 
   public async show({ params }: OfferIdRequest, res: Response): Promise<void> {
     const offer = await this.offerService.findById(params.offerId);
-
-    if (!offer) {
-      throw this.createNotFoundError(params.offerId);
-    }
-
     this.ok(res, fillDTO(OfferRdo, offer));
   }
 
   public async update({ params, body }: UpdateOfferRequest, res: Response): Promise<void> {
     const offer = await this.offerService.updateById(params.offerId, body);
-
-    if (!offer) {
-      throw this.createNotFoundError(params.offerId);
-    }
-
     this.ok(res, fillDTO(OfferRdo, offer));
   }
 
   public async delete({ params }: OfferIdRequest, res: Response): Promise<void> {
-    const offer = await this.offerService.deleteById(params.offerId);
-
-    if (!offer) {
-      throw this.createNotFoundError(params.offerId);
-    }
-
+    await this.offerService.deleteById(params.offerId);
     this.noContent(res);
-  }
-
-  private async ensureAuthorExists(authorId: string): Promise<void> {
-    if (!await this.userService.findById(authorId)) {
-      throw new HttpError(
-        StatusCodes.BAD_REQUEST,
-        `Author with id "${authorId}" not found.`,
-        'OfferController',
-      );
-    }
-  }
-
-  private createNotFoundError(offerId: string): HttpError {
-    return new HttpError(
-      StatusCodes.NOT_FOUND,
-      `Offer with id "${offerId}" not found.`,
-      'OfferController',
-    );
   }
 }

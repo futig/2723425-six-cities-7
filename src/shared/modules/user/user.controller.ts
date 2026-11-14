@@ -1,7 +1,15 @@
 import { inject, injectable } from 'inversify';
 import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { BaseController, HttpError, HttpMethod, ValidateDtoMiddleware } from '../../libs/rest/index.js';
+import {
+  BaseController,
+  DocumentExistsMiddleware,
+  HttpError,
+  HttpMethod,
+  UploadFileMiddleware,
+  ValidateDtoMiddleware,
+  ValidateObjectIdMiddleware,
+} from '../../libs/rest/index.js';
 import { Logger } from '../../libs/logger/index.js';
 import { Config, RestSchema } from '../../libs/config/index.js';
 import { Component } from '../../types/index.js';
@@ -12,6 +20,7 @@ import { LoginUserRequest } from './login-user-request.type.js';
 import { UserRdo } from './rdo/user.rdo.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { LoginUserDto } from './dto/login-user.dto.js';
+import { UploadAvatarRequest } from './upload-avatar-request.type.js';
 
 @injectable()
 export class UserController extends BaseController {
@@ -36,6 +45,16 @@ export class UserController extends BaseController {
       middlewares: [new ValidateDtoMiddleware(LoginUserDto)],
     });
     this.addRoute({ path: '/login', method: HttpMethod.Get, handler: this.checkAuthenticate });
+    this.addRoute({
+      path: '/:userId/avatar',
+      method: HttpMethod.Post,
+      handler: this.uploadAvatar,
+      middlewares: [
+        new ValidateObjectIdMiddleware('userId'),
+        new UploadFileMiddleware(this.config.get('UPLOAD_DIRECTORY'), 'avatar'),
+        new DocumentExistsMiddleware(this.userService, 'User', 'userId'),
+      ],
+    });
   }
 
   public async create({ body }: CreateUserRequest, res: Response): Promise<void> {
@@ -51,6 +70,20 @@ export class UserController extends BaseController {
 
     const result = await this.userService.create(body, this.config.get('SALT'));
     this.created(res, fillDTO(UserRdo, result));
+  }
+
+  public async uploadAvatar(req: UploadAvatarRequest, res: Response): Promise<void> {
+    if (!req.file) {
+      throw new HttpError(
+        StatusCodes.BAD_REQUEST,
+        'Avatar file is required.',
+        'UserController',
+      );
+    }
+
+    const avatarPath = `${req.protocol}://${req.get('host')}/upload/${req.file.filename}`;
+    await this.userService.updateById(req.params.userId, { avatarPath });
+    this.created(res, { avatarPath });
   }
 
   public async login({ body }: LoginUserRequest, _res: Response): Promise<void> {

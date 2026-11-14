@@ -1,11 +1,10 @@
 import { Response } from 'express';
-import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'inversify';
 import { fillDTO } from '../../helpers/index.js';
 import { Logger } from '../../libs/logger/index.js';
 import {
   BaseController,
-  HttpError,
+  DocumentExistsMiddleware,
   HttpMethod,
   ValidateDtoMiddleware,
   ValidateObjectIdMiddleware,
@@ -30,7 +29,10 @@ export class FavoriteController extends BaseController {
       path: '/',
       method: HttpMethod.Get,
       handler: this.index,
-      middlewares: [new ValidateDtoMiddleware(FavoriteQueryDto, 'query')],
+      middlewares: [
+        new ValidateDtoMiddleware(FavoriteQueryDto, 'query'),
+        new DocumentExistsMiddleware(this.userService, 'User', 'userId', 'query'),
+      ],
     });
     this.addRoute({
       path: '/:offerId',
@@ -39,6 +41,8 @@ export class FavoriteController extends BaseController {
       middlewares: [
         new ValidateObjectIdMiddleware('offerId'),
         new ValidateDtoMiddleware(FavoriteQueryDto, 'query'),
+        new DocumentExistsMiddleware(this.userService, 'User', 'userId', 'query'),
+        new DocumentExistsMiddleware(this.offerService, 'Offer', 'offerId'),
       ],
     });
     this.addRoute({
@@ -48,12 +52,13 @@ export class FavoriteController extends BaseController {
       middlewares: [
         new ValidateObjectIdMiddleware('offerId'),
         new ValidateDtoMiddleware(FavoriteQueryDto, 'query'),
+        new DocumentExistsMiddleware(this.userService, 'User', 'userId', 'query'),
+        new DocumentExistsMiddleware(this.offerService, 'Offer', 'offerId'),
       ],
     });
   }
 
   public async index({ query }: FavoriteIndexRequest, res: Response): Promise<void> {
-    await this.ensureUserExists(query.userId!);
     const offers = await this.offerService.findFavorites(query.userId!);
     const favorites = offers.map((offer) => ({
       ...offer.toObject({ virtuals: true }),
@@ -64,8 +69,7 @@ export class FavoriteController extends BaseController {
   }
 
   public async add({ params, query }: FavoriteOfferRequest, res: Response): Promise<void> {
-    await this.ensureUserExists(query.userId!);
-    const offer = await this.findOffer(params.offerId);
+    const offer = (await this.offerService.findById(params.offerId))!;
     await this.userService.addToFavorites(query.userId!, params.offerId);
 
     this.ok(res, fillDTO(OfferRdo, {
@@ -75,37 +79,12 @@ export class FavoriteController extends BaseController {
   }
 
   public async remove({ params, query }: FavoriteOfferRequest, res: Response): Promise<void> {
-    await this.ensureUserExists(query.userId!);
-    const offer = await this.findOffer(params.offerId);
+    const offer = (await this.offerService.findById(params.offerId))!;
     await this.userService.removeFromFavorites(query.userId!, params.offerId);
 
     this.ok(res, fillDTO(OfferRdo, {
       ...offer.toObject({ virtuals: true }),
       isFavorite: false,
     }));
-  }
-
-  private async findOffer(offerId: string) {
-    const offer = await this.offerService.findById(offerId);
-
-    if (!offer) {
-      throw new HttpError(
-        StatusCodes.NOT_FOUND,
-        `Offer with id "${offerId}" not found.`,
-        'FavoriteController',
-      );
-    }
-
-    return offer;
-  }
-
-  private async ensureUserExists(userId: string): Promise<void> {
-    if (!await this.userService.findById(userId)) {
-      throw new HttpError(
-        StatusCodes.NOT_FOUND,
-        `User with id "${userId}" not found.`,
-        'FavoriteController',
-      );
-    }
   }
 }

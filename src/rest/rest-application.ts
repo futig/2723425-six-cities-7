@@ -1,5 +1,6 @@
 import { inject, injectable } from 'inversify';
 import express, { Express } from 'express';
+import { mkdirSync } from 'node:fs';
 import { Logger } from '../shared/libs/logger/index.js';
 import { Config, RestSchema } from '../shared/libs/config/index.js';
 import { DatabaseClient } from '../shared/libs/database-client/index.js';
@@ -37,7 +38,11 @@ export class RestApplication {
   }
 
   private initMiddleware(): void {
+    const uploadDirectory = this.config.get('UPLOAD_DIRECTORY');
+    mkdirSync(uploadDirectory, { recursive: true });
+
     this.server.use(express.json());
+    this.server.use('/upload', express.static(uploadDirectory));
   }
 
   private initControllers(): void {
